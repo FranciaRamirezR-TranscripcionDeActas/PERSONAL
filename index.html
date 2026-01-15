@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Hábitos+ PRO - Construye tu Mejor Versión</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes slide-up {
+            from { transform: translateY(100%); }
+            to { transform: translateY(0); }
+        }
+        @keyframes fade-in {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes bounce-soft {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+        .animate-slide-up { animation: slide-up 0.3s ease-out; }
+        .animate-fade-in { animation: fade-in 0.4s ease-out; }
+        .animate-bounce-soft { animation: bounce-soft 2s ease-in-out infinite; }
+        .animate-pulse { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        
+        .gradient-bg {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
+        }
+        
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 via-purple-50 to-pink-50 min-h-screen">
+    <div id="app"></div>
+
+    <script>
+        // Storage API Simulation (will use localStorage for now, can be upgraded to cloud)
+        const storage = {
+            async get(key) {
+                const value = localStorage.getItem(key);
+                return value ? { key, value, shared: false } : null;
+            },
+            async set(key, value) {
+                localStorage.setItem(key, value);
+                return { key, value, shared: false };
+            },
+            async delete(key) {
+                localStorage.removeItem(key);
+                return { key, deleted: true, shared: false };
+            }
+        };
+
+        // State Management
+        let state = {
+            currentUser: null,
+            showLogin: true,
+            isRegistering: false,
+            habits: [],
+            currentView: 'today',
+            selectedDate: new Date().toISOString().split('T')[0],
+            currentMonth: new Date(),
+            showAddHabit: false,
+            newHabitName: '',
+            newHabitColor: '#4F46E5',
+            newHabitIcon: '🎯'
+        };
+
+        const colors = [
+            '#4F46E5', '#EC4899', '#10B981', '#F59E0B', 
+            '#8B5CF6', '#EF4444', '#06B6D4', '#84CC16',
+            '#F97316', '#14B8A6', '#3B82F6', '#A855F7'
+        ];
+
+        const icons = [
+            '🎯', '📚', '💪', '🧘', '💧', '🏃', '🎨', '✍️', 
+            '🎵', '🌱', '😴', '🍎', '📱', '🧠', '❤️', '🏠',
+            '🛏️', '🍳', '🚿', '🧹', '🧺', '🪴', '🔑', '⚡'
+        ];
+
+        const predefinedHabits = [
+            { name: 'Tender la cama', icon: '🛏️', color: '#10B981', category: 'Hogar' },
+            { name: 'Organizar la cocina', icon: '🍳', color: '#F59E0B', category: 'Hogar' },
+            { name: 'Lavar el lavamanos', icon: '🚿', color: '#06B6D4', category: 'Hogar' },
+            { name: 'Hacer aseo general', icon: '🧹', color: '#8B5CF6', category: 'Hogar' },
+            { name: 'Organizar el baño', icon: '🚿', color: '#EC4899', category: 'Hogar' },
+            { name: 'Lavar ropa', icon: '🧺', color: '#3B82F6', category: 'Hogar' },
+            { name: 'Regar plantas', icon: '🪴', color: '#84CC16', category: 'Hogar' },
+            { name: 'Hacer ejercicio', icon: '💪', color: '#EF4444', category: 'Salud' },
+            { name: 'Meditar', icon: '🧘', color: '#A855F7', category: 'Salud' },
+            { name: 'Tomar agua (2L)', icon: '💧', color: '#06B6D4', category: 'Salud' },
+            { name: 'Leer 30 min', icon: '📚', color: '#4F46E5', category: 'Personal' },
+            { name: 'Escribir diario', icon: '✍️', color: '#EC4899', category: 'Personal' },
+            { name: 'Estudiar', icon: '🎯', color: '#F59E0B', category: 'Personal' }
+        ];
+
+        const motivationalMessages = [
+            "¡Increíble! Tu disciplina está creciendo cada día 🌟",
+            "¡Wow! Estás construyendo una versión más fuerte de ti 💪",
+            "¡Excelente trabajo! La constancia es tu superpoder 🚀",
+            "¡Sigue brillando! Cada pequeño paso cuenta ✨",
+            "¡Eres imparable! Tu futuro yo te agradece 🎯",
+            "¡Fantástico progreso! La disciplina es tu mejor amiga 💖"
+        ];
+
+        // Helper Functions
+        function getCurrentDateTime() {
+            const now = new Date();
+            const days = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+            const months = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 
+                          'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+            
+            return {
+                day: days[now.getDay()],
+                date: now.getDate(),
+                month: months[now.getMonth()],
+                year: now.getFullYear(),
+                time: now.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
+            };
+        }
+
+        function getStreak(habit) {
+            if (habit.completedDates.length === 0) return 0;
+            
+            const sortedDates = [...habit.completedDates].sort().reverse();
+            const today = new Date().toISOString().split('T')[0];
+            
+            if (sortedDates[0] !== today) {
+                const yesterday = new Date();
+                yesterday.setDate(yesterday.getDate() - 1);
+                const yesterdayStr = yesterday.toISOString().split('T')[0];
+                if (sortedDates[0] !== yesterdayStr) return 0;
+            }
+            
+            let streak = 0;
+            let currentDate = new Date();
+            
+            for (let i = 0; i < sortedDates.length; i++) {
+                const dateStr = currentDate.toISOString().split('T')[0];
+                if (sortedDates[i] === dateStr) {
+                    streak++;
+                    currentDate.setDate(currentDate.getDate() - 1);
+                } else {
+                    break;
+                }
+            }
+            
+            return streak;
+        }
+
+        function getBestStreak(habit) {
+            if (habit.completedDates.length === 0) return 0;
+            
+            const sortedDates = [...habit.completedDates].sort();
+            let maxStreak = 1;
+            let currentStreak = 1;
+            
+            for (let i = 1; i < sortedDates.length; i++) {
+                const prevDate = new Date(sortedDates[i - 1]);
+                const currDate = new Date(sortedDates[i]);
+                const diffDays = Math.floor((currDate - prevDate) / (1000 * 60 * 60 * 24));
+                
+                if (diffDays === 1) {
+                    currentStreak++;
+                    maxStreak = Math.max(maxStreak, currentStreak);
+                } else {
+                    currentStreak = 1;
+                }
+            }
+            
+            return maxStreak;
+        }
+
+        function getCompletionRate(habit) {
+            const daysSinceCreation = Math.floor(
+                (new Date() - new Date(habit.createdAt)) / (1000 * 60 * 60 * 24)
+            ) + 1;
+            return Math.round((habit.completedDates.length / daysSinceCreation) * 100);
+        }
+
+        function getTodayStats() {
+            const today = new Date().toISOString().split('T')[0];
+            const completed = state.habits.filter(h => h.completedDates.includes(today)).length;
+            return { completed, total: state.habits.length };
+        }
+
+        function getMonthStats(month) {
+            const year = month.getFullYear();
+            const monthNum = month.getMonth();
+            const daysInMonth = new Date(year, monthNum + 1, 0).getDate();
+            
+            let totalCompleted = 0;
+            let totalPossible = state.habits.length * daysInMonth;
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                const date = `${year}-${String(monthNum + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                state.habits.forEach(habit => {
+                    if (habit.completedDates.includes(date)) {
+                        totalCompleted++;
+                    }
+                });
+            }
+            
+            return totalPossible > 0 ? Math.round((totalCompleted / totalPossible) * 100) : 0;
+        }
+
+        function getCalendarDays() {
+            const year = state.currentMonth.getFullYear();
+            const month = state.currentMonth.getMonth();
+            const firstDay = new Date(year, month, 1);
+            const lastDay = new Date(year, month + 1, 0);
+            const daysInMonth = lastDay.getDate();
+            const startingDayOfWeek = firstDay.getDay();
+            
+            const days = [];
+            
+            for (let i = 0; i < startingDayOfWeek; i++) {
+                days.push(null);
+            }
+            
+            for (let day = 1; day <= daysInMonth; day++) {
+                days.push(day);
+            }
+            
+            return days;
+        }
+
+        // Actions
+        async function loadUserData() {
+            try {
+                const result = await storage.get(`habits_${state.currentUser.username}`);
+                if (result && result.value) {
+                    const data = JSON.parse(result.value);
+                    state.habits = data.habits || [];
+                }
+            } catch (err) {
+                console.log('No previous data found');
+            }
+            render();
+        }
+
+        async function saveUserData() {
+            if (!state.currentUser) return;
+            try {
+                const data = { habits: state.habits, lastUpdated: new Date().toISOString() };
+                await storage.set(`habits_${state.currentUser.username}`, JSON.stringify(data));
+            } catch (err) {
+                console.error('Error saving data:', err);
+            }
+        }
+
+        async function handleLogin(username, password) {
+            if (!username.trim() || !password.trim()) {
+                alert('Por favor completa todos los campos');
+                return;
+            }
+
+            try {
+                if (state.isRegistering) {
+                    const existingUser = await storage.get(`user_${username}`);
+                    if (existingUser) {
+                        alert('Este usuario ya existe. Intenta iniciar sesión.');
+                        return;
+                    }
+
+                    const userData = {
+                        username,
+                        password,
+                        createdAt: new Date().toISOString()
+                    };
+                    await storage.set(`user_${username}`, JSON.stringify(userData));
+                    state.currentUser = { username };
+                    state.showLogin = false;
+                    await loadUserData();
+                } else {
+                    const result = await storage.get(`user_${username}`);
+                    if (result && result.value) {
+                        const userData = JSON.parse(result.value);
+                        if (userData.password === password) {
+                            state.currentUser = { username };
+                            state.showLogin = false;
+                            await loadUserData();
+                        } else {
+                            alert('Contraseña incorrecta');
+                        }
+                    } else {
+                        alert('Usuario no encontrado');
+                    }
+                }
+            } catch (err) {
+                alert('Error al conectar. Intenta de nuevo.');
+            }
+        }
+
+        function handleLogout() {
+            state.currentUser = null;
+            state.showLogin = true;
+            state.habits = [];
+            render();
+        }
+
+        function addHabit(name, icon, color) {
+            const newHabit = {
+                id: Date.now(),
+                name: name,
+                color: color,
+                icon: icon,
+                completedDates: [],
+                createdAt: new Date().toISOString()
+            };
+            state.habits.push(newHabit);
+            state.showAddHabit = false;
+            state.newHabitName = '';
+            saveUserData();
+            render();
+        }
+
+        function toggleHabit(habitId, date) {
+            state.habits = state.habits.map(habit => {
+                if (habit.id === habitId) {
+                    const dateIndex = habit.completedDates.indexOf(date);
+                    if (dateIndex > -1) {
+                        habit.completedDates = habit.completedDates.filter(d => d !== date);
+                    } else {
+                        habit.completedDates.push(date);
+                    }
+                }
+                return habit;
+            });
+            saveUserData();
+            render();
+        }
+
+        function deleteHabit(habitId) {
+            if (confirm('¿Estás segura de eliminar este hábito?')) {
+                state.habits = state.habits.filter(h => h.id !== habitId);
+                saveUserData();
+                render();
+            }
+        }
+
+        // Render Functions
+        function renderLoginScreen() {
+            const currentTime = getCurrentDateTime();
+            return `
+                <div class="min-h-screen gradient-bg flex items-center justify-center p-4">
+                    <div class="bg-white rounded-3xl shadow-2xl w-full max-w-md p-8 animate-fade-in">
+                        <div class="text-center mb-8">
+                            <div class="inline-flex items-center justify-center w-20 h-20 bg-gradient-to-br from-purple-500 to-pink-500 rounded-3xl mb-4 shadow-lg">
+                                <span class="text-4xl">✨</span>
+                            </div>
+                            <h1 class="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent mb-2">
+                                Mi Hábitos+
+                            </h1>
+                            <p class="text-gray-600">
+                                ${state.isRegistering ? 'Crea tu cuenta para comenzar' : 'Inicia sesión para continuar'}
+                            </p>
+                        </div>
+
+                        <form onsubmit="event.preventDefault(); handleLogin(document.getElementById('username').value, document.getElementById('password').value);" class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Usuario</label>
+                                <input
+                                    type="text"
+                                    id="username"
+                                    placeholder="Tu nombre de usuario"
+                                    class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition-all"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Contraseña</label>
+                                <input
+                                    type="password"
+                                    id="password"
+                                    placeholder="Tu contraseña"
+                                    class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition-all"
+                                    required
+                                />
+                            </div>
+
+                            <button
+                                type="submit"
+                                class="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-semibold hover:shadow-lg transition-all"
+                            >
+                                ${state.isRegistering ? 'Crear Cuenta' : 'Iniciar Sesión'}
+                            </button>
+
+                            <button
+                                type="button"
+                                onclick="state.isRegistering = !state.isRegistering; render();"
+                                class="w-full text-gray-600 py-2 text-sm hover:text-purple-600 transition-all"
+                            >
+                                ${state.isRegistering ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderTodayView() {
+            const stats = getTodayStats();
+            const today = state.selectedDate;
+
+            if (state.habits.length === 0) {
+                return `
+                    <div class="bg-white rounded-3xl shadow-lg p-12 text-center">
+                        <div class="text-7xl mb-6">🎯</div>
+                        <h3 class="text-2xl font-bold text-gray-800 mb-3">¡Comienza tu transformación!</h3>
+                        <p class="text-gray-600 mb-8">Agrega tus primeros hábitos y empieza a construir la mejor versión de ti</p>
+                        <button onclick="state.showAddHabit = true; render();" class="bg-gradient-to-r from-purple-600 to-pink-600 text-white px-8 py-4 rounded-full font-medium hover:shadow-xl transition-all">
+                            ➕ Agregar Hábito
+                        </button>
+                    </div>
+                `;
+            }
+
+            let habitsHtml = state.habits.map(habit => {
+                const isCompleted = habit.completedDates.includes(today);
+                const streak = getStreak(habit);
+                
+                return `
+                    <div class="bg-white rounded-2xl shadow-lg p-6 transition-all hover:shadow-xl">
+                        <div class="flex items-center gap-4">
+                            <button
+                                onclick="toggleHabit(${habit.id}, '${today}')"
+                                class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl transition-all ${
+                                    isCompleted
+                                        ? 'bg-gradient-to-br from-green-400 to-emerald-500 shadow-lg scale-105'
+                                        : 'bg-gray-100 hover:bg-gray-200'
+                                }"
+                                style="${isCompleted ? '' : `background-color: ${habit.color}20; color: ${habit.color}`}"
+                            >
+                                ${isCompleted ? '✓' : habit.icon}
+                            </button>
+                            
+                            <div class="flex-1">
+                                <h3 class="font-bold text-lg text-gray-800">${habit.name}</h3>
+                                <div class="flex items-center gap-4 mt-2">
+                                    ${streak > 0 ? `
+                                        <div class="flex items-center gap-1">
+                                            <span class="text-orange-500">🔥</span>
+                                            <span class="text-sm font-medium text-orange-500">${streak} día${streak !== 1 ? 's' : ''}</span>
+                                        </div>
+                                    ` : ''}
+                                    <div class="flex items-center gap-1">
+                                        <span class="text-indigo-500">📊</span>
+                                        <span class="text-sm text-gray-600">${habit.completedDates.length} completados</span>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <button
+                                onclick="deleteHabit(${habit.id})"
+                                class="w-10 h-10 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all flex items-center justify-center"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            if (stats.completed === stats.total && stats.total > 0) {
+                habitsHtml += `
+                    <div class="bg-gradient-to-r from-green-400 via-emerald-500 to-teal-500 rounded-2xl shadow-lg p-8 text-white text-center animate-bounce-soft">
+                        <div class="text-5xl mb-4">⭐</div>
+                        <p class="font-bold text-2xl mb-2">¡Día Perfecto!</p>
+                        <p class="text-lg opacity-90">${motivationalMessages[Math.floor(Math.random() * motivationalMessages.length)]}</p>
+                    </div>
+                `;
+            }
+
+            return `<div class="space-y-4">${habitsHtml}</div>`;
+        }
+
+        function renderCalendarView() {
+            const calendarDays = getCalendarDays();
+            const monthStats = getMonthStats(state.currentMonth);
+            const monthName = state.currentMonth.toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+
+            const daysHtml = calendarDays.map((day, idx) => {
+                if (!day) return '<div class="aspect-square"></div>';
+                
+                const dateStr = `${state.currentMonth.getFullYear()}-${String(state.currentMonth.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const completedToday = state.habits.filter(h => h.completedDates.includes(dateStr)).length;
+                const percentage = state.habits.length > 0 ? (completedToday / state.habits.length) * 100 : 0;
+                const isToday = dateStr === new Date().toISOString().split('T')[0];
+                
+                const bgColor = percentage === 100 ? '#10B981' : percentage >= 50 ? '#F59E0B' : percentage > 0 ? '#F3F4F6' : '#FFFFFF';
+                const textColor = percentage >= 50 ? '#FFFFFF' : '#374151';
+                
+                return `
+                    <div class="aspect-square rounded-xl p-2 flex flex-col items-center justify-center transition-all ${isToday ? 'ring-2 ring-purple-500' : ''}"
+                         style="background-color: ${bgColor}; color: ${textColor}">
+                        <div class="text-sm font-medium">${day}</div>
+                        ${completedToday > 0 ? `<div class="text-xs mt-1 opacity-80">${completedToday}/${state.habits.length}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="bg-white rounded-3xl shadow-lg p-6">
+                    <div class="flex items-center justify-between mb-6">
+                        <button onclick="state.currentMonth = new Date(state.currentMonth.setMonth(state.currentMonth.getMonth() - 1)); render();"
+                                class="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all">
+                            ‹
+                        </button>
+                        <h2 class="text-2xl font-bold text-gray-800 capitalize">${monthName}</h2>
+                        <button onclick="state.currentMonth = new Date(state.currentMonth.setMonth(state.currentMonth.getMonth() + 1)); render();"
+                                class="w-10 h-10 rounded-xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all">
+                            ›
+                        </button>
+                    </div>
+
+                    <div class="bg-gradient-to-r from-purple-100 to-pink-100 rounded-xl p-4 mb-6 text-center">
+                        <div class="text-sm text-gray-600">Progreso del mes</div>
+                        <div class="text-3xl font-bold text-purple-600 mt-1">${monthStats}%</div>
+                    </div>
+
+                    <div class="grid grid-cols-7 gap-2 mb-2">
+                        ${['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => 
+                            `<div class="text-center text-sm font-medium text-gray-600 py-2">${day}</div>`
+                        ).join('')}
+                    </div>
+
+                    <div class="grid grid-cols-7 gap-2">${daysHtml}</div>
+
+                    <div class="mt-6 flex items-center justify-center gap-6 text-sm">
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 rounded bg-green-500"></div>
+                            <span class="text-gray-600">100%</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 rounded bg-orange-500"></div>
+                            <span class="text-gray-600">50-99%</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="w-4 h-4 rounded bg-gray-200"></div>
+                            <span class="text-gray-600">1-49%</span>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderStatsView() {
+            if (state.habits.length === 0) {
+                return `
+                    <div class="bg-white rounded-3xl shadow-lg p-12 text-center">
+                        <div class="text-6xl mb-4">📊</div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">Sin estadísticas aún</h3>
+                        <p class="text-gray-500">Agrega hábitos para ver tu análisis de progreso</p>
+                    </div>
+                `;
+            }
+
+            return state.habits.map(habit => {
+                const completionRate = getCompletionRate(habit);
+                const streak = getStreak(habit);
+                const bestStreak = getBestStreak(habit);
+                const totalDays = habit.completedDates.length;
+                const daysSinceCreation = Math.floor((new Date() - new Date(habit.createdAt)) / (1000 * 60 * 60 * 24)) + 1;
+                
+                return `
+                    <div class="bg-white rounded-2xl shadow-lg p-6 mb-4">
+                        <div class="flex items-center gap-4 mb-6">
+                            <div class="w-16 h-16 rounded-2xl flex items-center justify-center text-3xl shadow-lg"
+                                 style="background-color: ${habit.color}20; color: ${habit.color}">
+                                ${habit.icon}
+                            </div>
+                            <div class="flex-1">
+                                <h3 class="font-bold text-xl text-gray-800">${habit.name}</h3>
+                                <p class="text-sm text-gray-500 mt-1">
+                                    Desde ${new Date(habit.createdAt).toLocaleDateString('es-ES')} (${daysSinceCreation} días)
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                            <div class="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4">
+                                <div class="text-sm text-orange-700 font-medium mb-2">🔥 Racha Actual</div>
+                                <div class="text-3xl font-bold text-orange-600">${streak}</div>
+                                <div class="text-xs text-orange-600 mt-1">días seguidos</div>
+                            </div>
+                            
+                            <div class="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4">
+                                <div class="text-sm text-purple-700 font-medium mb-2">🏆 Mejor Racha</div>
+                                <div class="text-3xl font-bold text-purple-600">${bestStreak}</div>
+                                <div class="text-xs text-purple-600 mt-1">días máximo</div>
+                            </div>
+                            
+                            <div class="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl p-4">
+                                <div class="text-sm text-indigo-700 font-medium mb-2">📈 Tasa de Éxito</div>
+                                <div class="text-3xl font-bold text-indigo-600">${completionRate}%</div>
+                                <div class="text-xs text-indigo-600 mt-1">completado</div>
+                            </div>
+
+                            <div class="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4">
+                                <div class="text-sm text-green-700 font-medium mb-2">✓ Total</div>
+                                <div class="text-3xl font-bold text-green-600">${totalDays}</div>
+                                <div class="text-xs text-green-600 mt-1">días completados</div>
+                            </div>
+                        </div>
+
+                        ${completionRate < 50 && totalDays > 5 ? `
+                            <div class="bg-yellow-50 border-2 border-yellow-200 rounded-xl p-4">
+                                <div class="flex items-start gap-3">
+                                    <div class="text-2xl">💡</div>
+                                    <div>
+                                        <div class="font-medium text-yellow-800 mb-1">Área de mejora</div>
+                                        <p class="text-sm text-yellow-700">
+                                            Tu tasa de éxito es del ${completionRate}%. Intenta ser más constante para ver mejores resultados.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+
+                        ${streak >= 7 ? `
+                            <div class="bg-green-50 border-2 border-green-200 rounded-xl p-4">
+                                <div class="flex items-start gap-3">
+                                    <div class="text-2xl">🎉</div>
+                                    <div>
+                                        <div class="font-medium text-green-800 mb-1">¡Excelente trabajo!</div>
+                                        <p class="text-sm text-green-700">
+                                            Llevas ${streak} días consecutivos. ¡Sigue así, estás construyendo un hábito sólido!
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderAddHabitModal() {
+            if (!state.showAddHabit) return '';
+
+            return `
+                <div class="fixed inset-0 bg-black/50 flex items-end sm:items-center justify-center z-50 p-4">
+                    <div class="bg-white rounded-t-3xl sm:rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6 animate-slide-up">
+                        <div class="flex items-center justify-between mb-6">
+                            <h2 class="text-2xl font-bold text-gray-800">Agregar Hábito</h2>
+                            <button onclick="state.showAddHabit = false; render();" 
+                                    class="w-10 h-10 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center transition-all">
+                                ✕
+                            </button>
+                        </div>
+
+                        <div class="mb-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Hábitos Sugeridos</h3>
+                            <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+                                ${predefinedHabits.map(habit => `
+                                    <button onclick="addHabit('${habit.name}', '${habit.icon}', '${habit.color}')"
+                                            class="bg-gradient-to-br from-gray-50 to-gray-100 hover:from-purple-50 hover:to-pink-50 rounded-xl p-4 transition-all text-left hover:shadow-lg">
+                                        <div class="text-3xl mb-2">${habit.icon}</div>
+                                        <div class="text-sm font-medium text-gray-800">${habit.name}</div>
+                                        <div class="text-xs text-gray-500 mt-1">${habit.category}</div>
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="border-t pt-6">
+                            <h3 class="text-lg font-semibold text-gray-800 mb-4">Crear Hábito Personalizado</h3>
+                            <form onsubmit="event.preventDefault(); addHabit(state.newHabitName, state.newHabitIcon, state.newHabitColor);" class="space-y-5">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">Nombre del hábito</label>
+                                    <input type="text" 
+                                           oninput="state.newHabitName = this.value"
+                                           value="${state.newHabitName}"
+                                           placeholder="Ej: Practicar yoga"
+                                           class="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition-all"
+                                           required />
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-3">Elige un icono</label>
+                                    <div class="grid grid-cols-8 gap-2">
+                                        ${icons.map(icon => `
+                                            <button type="button"
+                                                    onclick="state.newHabitIcon = '${icon}'; render();"
+                                                    class="w-12 h-12 rounded-xl text-2xl transition-all ${
+                                                        state.newHabitIcon === icon
+                                                            ? 'bg-purple-100 ring-2 ring-purple-500 scale-110'
+                                                            : 'bg-gray-100 hover:bg-gray-200'
+                                                    }">
+                                                ${icon}
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 mb-3">Elige un color</label>
+                                    <div class="grid grid-cols-6 gap-3">
+                                        ${colors.map(color => `
+                                            <button type="button"
+                                                    onclick="state.newHabitColor = '${color}'; render();"
+                                                    class="h-12 rounded-xl transition-all ${
+                                                        state.newHabitColor === color
+                                                            ? 'ring-2 ring-offset-2 ring-gray-400 scale-110'
+                                                            : 'hover:scale-105'
+                                                    }"
+                                                    style="background-color: ${color}">
+                                            </button>
+                                        `).join('')}
+                                    </div>
+                                </div>
+
+                                <button type="submit"
+                                        class="w-full bg-gradient-to-r from-purple-600 to-pink-600 text-white py-4 rounded-xl font-semibold hover:shadow-lg transition-all">
+                                    Crear Hábito
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMainApp() {
+            const currentTime = getCurrentDateTime();
+            const stats = getTodayStats();
+
+            return `
+                <div class="max-w-6xl mx-auto p-4 pb-24">
+                    <!-- Header -->
+                    <div class="bg-white rounded-3xl shadow-lg p-6 mb-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center gap-4">
+                                <div class="w-14 h-14 bg-gradient-to-br from-purple-500 to-pink-500 rounded-2xl flex items-center justify-center shadow-lg">
+                                    <span class="text-2xl">✨</span>
+                                </div>
+                                <div>
+                                    <h1 class="text-2xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+                                        Hola, ${state.currentUser.username}! 👋
+                                    </h1>
+                                    <div class="flex items-center gap-3 mt-1 text-sm text-gray-600">
+                                        <span>📅 ${currentTime.day}, ${currentTime.date} de ${currentTime.month} ${currentTime.year}</span>
+                                        <span>🕐 ${currentTime.time}</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button onclick="handleLogout()"
+                                    class="w-12 h-12 rounded-xl bg-red-50 text-red-500 hover:bg-red-100 transition-all flex items-center justify-center">
+                                🚪
+                            </button>
+                        </div>
+
+                        ${state.habits.length > 0 ? `
+                            <div class="bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 rounded-2xl p-6 text-white">
+                                <div class="flex items-center justify-between mb-4">
+                                    <div>
+                                        <div class="text-sm opacity-90">Progreso de Hoy</div>
+                                        <div class="text-4xl font-bold mt-1">${stats.completed}/${stats.total}</div>
+                                        <div class="text-sm opacity-90 mt-1">${Math.round((stats.completed / stats.total) * 100)}% completado</div>
+                                    </div>
+                                    <div class="text-6xl opacity-80">🏆</div>
+                                </div>
+                                <div class="bg-white/20 rounded-full h-3 overflow-hidden backdrop-blur-sm">
+                                    <div class="bg-white h-full rounded-full transition-all duration-500 shadow-lg"
+                                         style="width: ${(stats.completed / stats.total) * 100}%"></div>
+                                </div>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- Navigation -->
+                    <div class="grid grid-cols-3 gap-3 mb-6">
+                        <button onclick="state.currentView = 'today'; render();"
+                                class="py-4 px-4 rounded-2xl font-medium transition-all shadow-lg ${
+                                    state.currentView === 'today'
+                                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                }">
+                            🎯 Hoy
+                        </button>
+                        <button onclick="state.currentView = 'calendar'; render();"
+                                class="py-4 px-4 rounded-2xl font-medium transition-all shadow-lg ${
+                                    state.currentView === 'calendar'
+                                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                }">
+                            📅 Calendario
+                        </button>
+                        <button onclick="state.currentView = 'stats'; render();"
+                                class="py-4 px-4 rounded-2xl font-medium transition-all shadow-lg ${
+                                    state.currentView === 'stats'
+                                        ? 'bg-gradient-to-r from-indigo-600 to-purple-600 text-white'
+                                        : 'bg-white text-gray-600 hover:bg-gray-50'
+                                }">
+                            📊 Análisis
+                        </button>
+                    </div>
+
+                    <!-- Content -->
+                    ${state.currentView === 'today' ? renderTodayView() : ''}
+                    ${state.currentView === 'calendar' ? renderCalendarView() : ''}
+                    ${state.currentView === 'stats' ? renderStatsView() : ''}
+
+                    <!-- Floating Add Button -->
+                    ${state.habits.length > 0 ? `
+                        <button onclick="state.showAddHabit = true; render();"
+                                class="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-full shadow-2xl hover:scale-110 transition-all flex items-center justify-center z-40">
+                            <span class="text-3xl">+</span>
+                        </button>
+                    ` : ''}
+                </div>
+
+                ${renderAddHabitModal()}
+            `;
+        }
+
+        function render() {
+            const app = document.getElementById('app');
+            if (state.showLogin) {
+                app.innerHTML = renderLoginScreen();
+            } else {
+                app.innerHTML = renderMainApp();
+            }
+        }
+
+        // Update time every second
+        setInterval(() => {
+            if (!state.showLogin) {
+                const timeElements = document.querySelectorAll('[class*="text-sm text-gray-600"]');
+                const currentTime = getCurrentDateTime();
+                timeElements.forEach(el => {
+                    if (el.textContent.includes('🕐')) {
+                        el.innerHTML = `<span>📅 ${currentTime.day}, ${currentTime.date} de ${currentTime.month} ${currentTime.year}</span><span>🕐 ${currentTime.time}</span>`;
+                    }
+                });
+            }
+        }, 1000);
+
+        // Initial render
+        render();
+    </script>
+</body>
+</html>
